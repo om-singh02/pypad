@@ -186,8 +186,8 @@ nav{
     <div class="step" id="s1"><div class="step-dot">○</div><span>numpy</span></div>
     <div class="step" id="s2"><div class="step-dot">○</div><span>pandas</span></div>
     <div class="step" id="s3"><div class="step-dot">○</div><span>matplotlib (charts + graphs)</span></div>
-    <div class="step" id="s4"><div class="step-dot">○</div><span>openpyxl (Excel support)</span></div>
-    <div class="step" id="s5"><div class="step-dot">○</div><span>micropip</span></div>
+    <div class="step" id="s4"><div class="step-dot">○</div><span>micropip (library installer)</span></div>
+    <div class="step" id="s5"><div class="step-dot">○</div><span>openpyxl (Excel support)</span></div>
   </div>
   <div class="sp-note">Needs internet on first load<br>Cached for offline use after</div>
 </div>
@@ -300,31 +300,38 @@ function stepState(id, state) {
 }
 
 (async () => {
+  let failedStep = 's0';
   try {
+    failedStep = 's0';
     stepState('s0','active');
     py = await loadPyodide({ indexURL: 'https://cdn.jsdelivr.net/pyodide/v0.25.1/full/' });
     stepState('s0','done');
 
+    failedStep = 's1';
     stepState('s1','active');
     await py.loadPackage('numpy');
     stepState('s1','done');
 
+    failedStep = 's2';
     stepState('s2','active');
     await py.loadPackage('pandas');
     stepState('s2','done');
 
+    failedStep = 's3';
     stepState('s3','active');
     await py.loadPackage('matplotlib');
-    // Force Agg backend so plots render to image, not a GUI window
     await py.runPythonAsync(`import matplotlib\nmatplotlib.use('Agg')`);
     stepState('s3','done');
 
+    failedStep = 's4';
     stepState('s4','active');
-    await py.loadPackage('openpyxl');
+    await py.loadPackage('micropip');
     stepState('s4','done');
 
+    // openpyxl via micropip (not a built-in Pyodide package)
+    failedStep = 's5';
     stepState('s5','active');
-    await py.loadPackage('micropip');
+    await py.runPythonAsync(`import micropip\nawait micropip.install('openpyxl')`);
     stepState('s5','done');
 
     // Create /files directory in Pyodide FS
@@ -338,9 +345,9 @@ function stepState(id, state) {
     document.getElementById('run-btn').disabled = false;
     renderPkgs();
   } catch(e) {
-    stepState('s0','err');
+    stepState(failedStep,'err');
     document.getElementById('splash').insertAdjacentHTML('beforeend',
-      `<p class="sp-err">Failed to load Python.<br>Check your internet connection<br>and reload the page.</p>`);
+      `<p class="sp-err">Failed at: <strong>${failedStep}</strong><br>${e.message||e}<br><br>Check your connection and reload.</p>`);
   }
 })();
 

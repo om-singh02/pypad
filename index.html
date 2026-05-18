@@ -160,7 +160,16 @@ nav{
 .hload{font-size:12px;color:var(--accent);background:var(--accent-dim);border:none;border-radius:20px;padding:4px 13px;cursor:pointer;font-family:'DM Sans',sans-serif;font-weight:500}
 .hcode{font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .hout{font-size:12px;color:var(--text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-family:'JetBrains Mono',monospace}
-.empty{text-align:center;padding:3rem 1rem;color:var(--text-muted)}
+.empty{text-align:center;padding:3rem 1rem;color:var(--text-muted)};align-items:center;gap:8px;flex-wrap:wrap;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:10px 12px}
+.files-label{font-size:11px;font-weight:600;letter-spacing:0.6px;text-transform:uppercase;color:var(--text-muted);flex-shrink:0}
+.file-chips{display:flex;flex-wrap:wrap;gap:6px;flex:1}
+.fchip{display:inline-flex;align-items:center;gap:5px;font-family:'JetBrains Mono',monospace;font-size:11px;padding:4px 9px;border-radius:20px;border:1px solid rgba(45,212,160,0.3);background:var(--accent-dim);color:var(--accent);cursor:pointer;white-space:nowrap}
+.fchip:active{opacity:0.7}
+.fchip svg{width:11px;height:11px;flex-shrink:0}
+.upload-label{display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:500;color:var(--text-muted);background:var(--surface2);border:1px dashed var(--border2);border-radius:20px;padding:4px 12px;cursor:pointer;white-space:nowrap;flex-shrink:0}
+.upload-label:active{background:var(--surface3)}
+.upload-label svg{width:13px;height:13px}
+.file-hint{font-size:11px;color:var(--text-dim);font-family:'JetBrains Mono',monospace;padding:2px 0}
 .empty svg{width:38px;height:38px;margin:0 auto 12px;display:block;opacity:0.3}
 .empty p{font-size:14px;line-height:1.6}
 .hist-foot{font-size:11px;color:var(--text-dim);text-align:center;padding-top:4px}
@@ -176,7 +185,8 @@ nav{
     <div class="step" id="s0"><div class="step-dot">○</div><span>Python runtime</span></div>
     <div class="step" id="s1"><div class="step-dot">○</div><span>numpy</span></div>
     <div class="step" id="s2"><div class="step-dot">○</div><span>pandas</span></div>
-    <div class="step" id="s3"><div class="step-dot">○</div><span>micropip</span></div>
+    <div class="step" id="s3"><div class="step-dot">○</div><span>openpyxl (Excel support)</span></div>
+    <div class="step" id="s4"><div class="step-dot">○</div><span>micropip</span></div>
   </div>
   <div class="sp-note">Needs internet on first load<br>Cached for offline use after</div>
 </div>
@@ -192,17 +202,28 @@ nav{
 
   <main>
     <div class="view on" id="editor-view">
+      <div class="files-bar">
+        <span class="files-label">Files</span>
+        <div class="file-chips" id="file-chips">
+          <span class="file-hint" id="file-hint">no files loaded</span>
+        </div>
+        <label class="upload-label">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+          Upload file
+          <input type="file" id="file-input" accept=".xlsx,.xls,.csv,.json,.txt,.tsv" style="display:none" onchange="handleFile(this)" multiple>
+        </label>
+      </div>
       <textarea id="code" spellcheck="false" autocorrect="off" autocapitalize="off" autocomplete="off"
-        placeholder="# numpy + pandas are preloaded
-import numpy as np
+        placeholder="# Upload a file above, then tap its chip to insert the read line
 import pandas as pd
 
-arr = np.array([10, 20, 30, 40, 50])
-print(f'Mean: {arr.mean()}')
-print(f'Std:  {arr.std():.2f}')
+# Example after uploading data.xlsx:
+# df = pd.read_excel('/files/data.xlsx')
+# print(df.head())
 
-df = pd.DataFrame({'x': arr, 'x2': arr**2})
-print(df.head())"></textarea>
+import numpy as np
+arr = np.array([10, 20, 30, 40, 50])
+print(f'Mean: {arr.mean()}, Std: {arr.std():.2f}')"></textarea>
       <div>
         <div class="out-label">Output</div>
         <div id="output" class="ph">Run your code to see output...</div>
@@ -289,8 +310,15 @@ function stepState(id, state) {
     stepState('s2','done');
 
     stepState('s3','active');
-    await py.loadPackage('micropip');
+    await py.loadPackage('openpyxl');
     stepState('s3','done');
+
+    stepState('s4','active');
+    await py.loadPackage('micropip');
+    stepState('s4','done');
+
+    // Create /files directory in Pyodide FS
+    py.FS.mkdir('/files');
 
     await new Promise(r => setTimeout(r, 600));
     document.getElementById('splash').classList.add('fade');
@@ -443,6 +471,53 @@ async function addPkg() {
     msg.className = 'inst-msg bad';
   }
   btn.disabled = false; btn.textContent = 'Install';
+}
+
+async function handleFile(input) {
+  if (!py) return;
+  const files = Array.from(input.files);
+  for (const file of files) {
+    try {
+      const buf = await file.arrayBuffer();
+      const uint8 = new Uint8Array(buf);
+      const path = '/files/' + file.name;
+      py.FS.writeFile(path, uint8);
+      addFileChip(file.name, path);
+    } catch(e) {
+      console.error('File load error:', e);
+    }
+  }
+  input.value = '';
+}
+
+const loadedFiles = [];
+
+function addFileChip(name, path) {
+  if (loadedFiles.includes(path)) return;
+  loadedFiles.push(path);
+  document.getElementById('file-hint').style.display = 'none';
+  const ext = name.split('.').pop().toLowerCase();
+  const readSnippet = ext === 'csv' ? `pd.read_csv('${path}')` :
+    (ext === 'xlsx' || ext === 'xls') ? `pd.read_excel('${path}')` :
+    ext === 'json' ? `pd.read_json('${path}')` : `open('${path}').read()`;
+  const chip = document.createElement('span');
+  chip.className = 'fchip';
+  chip.title = 'Tap to copy path';
+  chip.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>${name}`;
+  chip.onclick = () => insertSnippet(readSnippet);
+  document.getElementById('file-chips').appendChild(chip);
+}
+
+function insertSnippet(snippet) {
+  const ta = document.getElementById('code');
+  const start = ta.selectionStart;
+  const before = ta.value.substring(0, start);
+  const after = ta.value.substring(ta.selectionEnd);
+  const needsNewline = before.length > 0 && !before.endsWith('\n');
+  const insert = (needsNewline ? '\n' : '') + snippet;
+  ta.value = before + insert + after;
+  ta.selectionStart = ta.selectionEnd = start + insert.length;
+  ta.focus();
 }
 
 function esc(s) {

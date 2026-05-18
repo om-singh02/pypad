@@ -78,8 +78,9 @@ main{flex:1;overflow:hidden;position:relative}
 #output{
   font-family:'JetBrains Mono',monospace;font-size:13px;line-height:1.7;
   background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);
-  padding:14px;white-space:pre-wrap;word-break:break-word;
-  min-height:60px;max-height:200px;overflow-y:auto;color:var(--text);
+  padding:14px;white-space:pre;overflow-x:auto;overflow-y:auto;
+  min-height:60px;max-height:200px;color:var(--text);
+  -webkit-overflow-scrolling:touch;
 }
 #output.ph{color:var(--text-muted)}
 #output.ok{border-color:rgba(45,212,160,0.25)}
@@ -98,9 +99,9 @@ main{flex:1;overflow:hidden;position:relative}
 .modal-close{background:var(--surface2);border:1px solid var(--border2);border-radius:20px;padding:6px 14px;font-size:13px;color:var(--text);cursor:pointer}
 .modal-copy{background:var(--accent-dim);border:1px solid rgba(45,212,160,0.3);border-radius:20px;padding:6px 14px;font-size:13px;color:var(--accent);cursor:pointer}
 #out-modal-body{
-  flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;
+  flex:1;overflow-y:auto;overflow-x:auto;-webkit-overflow-scrolling:touch;
   padding:16px;font-family:'JetBrains Mono',monospace;font-size:13px;
-  line-height:1.75;white-space:pre-wrap;word-break:break-word;color:var(--text);
+  line-height:1.75;white-space:pre;color:var(--text);
 }
 #out-modal-imgs{padding:0 16px 16px;display:flex;flex-direction:column;gap:10px}
 .ed-foot{display:flex;justify-content:flex-end;padding-top:4px}

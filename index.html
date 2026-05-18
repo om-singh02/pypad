@@ -185,8 +185,9 @@ nav{
     <div class="step" id="s0"><div class="step-dot">○</div><span>Python runtime</span></div>
     <div class="step" id="s1"><div class="step-dot">○</div><span>numpy</span></div>
     <div class="step" id="s2"><div class="step-dot">○</div><span>pandas</span></div>
-    <div class="step" id="s3"><div class="step-dot">○</div><span>openpyxl (Excel support)</span></div>
-    <div class="step" id="s4"><div class="step-dot">○</div><span>micropip</span></div>
+    <div class="step" id="s3"><div class="step-dot">○</div><span>matplotlib (charts + graphs)</span></div>
+    <div class="step" id="s4"><div class="step-dot">○</div><span>openpyxl (Excel support)</span></div>
+    <div class="step" id="s5"><div class="step-dot">○</div><span>micropip</span></div>
   </div>
   <div class="sp-note">Needs internet on first load<br>Cached for offline use after</div>
 </div>
@@ -214,19 +215,22 @@ nav{
         </label>
       </div>
       <textarea id="code" spellcheck="false" autocorrect="off" autocapitalize="off" autocomplete="off"
-        placeholder="# Upload a file above, then tap its chip to insert the read line
-import pandas as pd
-
-# Example after uploading data.xlsx:
-# df = pd.read_excel('/files/data.xlsx')
-# print(df.head())
-
+        placeholder="# numpy, pandas, matplotlib all preloaded
+import matplotlib.pyplot as plt
 import numpy as np
-arr = np.array([10, 20, 30, 40, 50])
-print(f'Mean: {arr.mean()}, Std: {arr.std():.2f}')"></textarea>
+
+x = np.linspace(0, 2 * np.pi, 100)
+plt.figure(figsize=(6, 3))
+plt.plot(x, np.sin(x), label='sin')
+plt.plot(x, np.cos(x), label='cos')
+plt.legend()
+plt.title('Sine and Cosine')
+plt.tight_layout()
+plt.show()"></textarea>
       <div>
         <div class="out-label">Output</div>
         <div id="output" class="ph">Run your code to see output...</div>
+        <div id="output-imgs" style="display:flex;flex-direction:column;gap:10px;margin-top:10px;"></div>
       </div>
       <div class="ed-foot">
         <button class="ghost-btn" onclick="clearEd()">Clear editor</button>
@@ -310,12 +314,18 @@ function stepState(id, state) {
     stepState('s2','done');
 
     stepState('s3','active');
-    await py.loadPackage('openpyxl');
+    await py.loadPackage('matplotlib');
+    // Force Agg backend so plots render to image, not a GUI window
+    await py.runPythonAsync(`import matplotlib\nmatplotlib.use('Agg')`);
     stepState('s3','done');
 
     stepState('s4','active');
-    await py.loadPackage('micropip');
+    await py.loadPackage('openpyxl');
     stepState('s4','done');
+
+    stepState('s5','active');
+    await py.loadPackage('micropip');
+    stepState('s5','done');
 
     // Create /files directory in Pyodide FS
     py.FS.mkdir('/files');
@@ -348,6 +358,7 @@ function clearEd() {
   const o = document.getElementById('output');
   o.textContent = 'Run your code to see output...';
   o.className = 'ph';
+  document.getElementById('output-imgs').innerHTML = '';
 }
 
 async function runCode() {
@@ -360,6 +371,7 @@ async function runCode() {
   btn.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18" class="spin-icon"><circle cx="12" cy="12" r="10" stroke-dasharray="32" stroke-dashoffset="10"/></svg> Running...`;
   out.className = '';
   out.textContent = '';
+  document.getElementById('output-imgs').innerHTML = '';
   let result = '';
   try {
     await py.runPythonAsync(`import sys\nfrom io import StringIO\n_b=StringIO()\nsys.stdout=_b\nsys.stderr=_b`);
@@ -375,6 +387,33 @@ async function runCode() {
   }
   out.textContent = result;
   out.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+
+  // Capture any matplotlib figures and render as images
+  try {
+    const figJson = await py.runPythonAsync(`
+import sys, json, io, base64
+_imgs = []
+if 'matplotlib.pyplot' in sys.modules:
+    import matplotlib.pyplot as plt
+    for _num in plt.get_fignums():
+        _fig = plt.figure(_num)
+        _buf = io.BytesIO()
+        _fig.savefig(_buf, format='png', bbox_inches='tight', dpi=150, facecolor='white')
+        _buf.seek(0)
+        _imgs.append(base64.b64encode(_buf.read()).decode())
+    plt.close('all')
+json.dumps(_imgs)
+`);
+    const imgs = JSON.parse(figJson);
+    const imgDiv = document.getElementById('output-imgs');
+    imgs.forEach(b64 => {
+      const img = document.createElement('img');
+      img.src = 'data:image/png;base64,' + b64;
+      img.style.cssText = 'width:100%;border-radius:10px;display:block;border:1px solid rgba(255,255,255,0.07);';
+      imgDiv.appendChild(img);
+    });
+    if (imgs.length) imgDiv.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  } catch(_) {}
   btn.disabled = false;
   btn.innerHTML = `<svg viewBox="0 0 24 24" fill="currentColor" width="18" height="18"><path d="M8 5.14v14l11-7-11-7z"/></svg> Run`;
   save(code, result);

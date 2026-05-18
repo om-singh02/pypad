@@ -1,0 +1,453 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
+<meta name="apple-mobile-web-app-title" content="PyPad">
+<title>PyPad</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+:root{
+  --bg:#0e0e12;--surface:#15151b;--surface2:#1c1c25;--surface3:#22222d;
+  --border:rgba(255,255,255,0.07);--border2:rgba(255,255,255,0.13);
+  --accent:#2dd4a0;--accent-dim:rgba(45,212,160,0.12);
+  --text:#e2e2ea;--text-muted:#6b6b80;--text-dim:#32323f;
+  --error:#ff5e5e;--error-dim:rgba(255,94,94,0.1);
+  --radius:10px;--radius-sm:7px;
+  --header-h:52px;--run-h:64px;--nav-h:58px;
+  --safe-top:env(safe-area-inset-top,0px);
+  --safe-bottom:env(safe-area-inset-bottom,0px);
+}
+html,body{height:100%;background:var(--bg);color:var(--text);font-family:'DM Sans',system-ui,sans-serif;overflow:hidden}
+
+/* Splash */
+#splash{position:fixed;inset:0;background:var(--bg);display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:200;padding:2rem;transition:opacity 0.4s}
+#splash.fade{opacity:0;pointer-events:none}
+.sp-icon{font-size:52px;margin-bottom:10px}
+.sp-title{font-size:26px;font-weight:600;letter-spacing:-0.5px;margin-bottom:4px}
+.sp-sub{font-size:13px;color:var(--text-muted);margin-bottom:36px}
+.steps{width:100%;max-width:260px}
+.step{display:flex;align-items:center;gap:12px;padding:9px 0;font-size:13.5px;color:var(--text-dim);border-bottom:1px solid var(--border)}
+.step:last-child{border:none}
+.step.active{color:var(--text)}
+.step.done{color:var(--accent)}
+.step.err{color:var(--error)}
+.step-dot{width:20px;height:20px;border-radius:50%;border:1.5px solid var(--text-dim);flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:11px}
+.step.active .step-dot{border-color:var(--text);animation:spin 0.9s linear infinite}
+.step.done .step-dot{border-color:var(--accent);background:var(--accent);color:#fff}
+.step.err .step-dot{border-color:var(--error);background:var(--error);color:#fff}
+@keyframes spin{to{transform:rotate(360deg)}}
+.sp-note{margin-top:24px;font-size:11px;color:var(--text-dim);text-align:center;line-height:1.7}
+.sp-err{color:var(--error);font-size:13px;margin-top:16px;text-align:center;line-height:1.6}
+
+/* Shell */
+#app{display:flex;flex-direction:column;height:100dvh}
+
+/* Header */
+header{
+  height:calc(var(--header-h) + var(--safe-top));padding-top:var(--safe-top);
+  flex-shrink:0;display:flex;align-items:center;justify-content:space-between;
+  padding-left:16px;padding-right:16px;
+  border-bottom:1px solid var(--border);background:var(--bg);
+}
+.h-left{display:flex;align-items:center;gap:9px}
+.dot{width:7px;height:7px;border-radius:50%;background:var(--text-dim);flex-shrink:0;transition:background 0.4s}
+.dot.on{background:var(--accent);box-shadow:0 0 7px rgba(45,212,160,0.6)}
+.app-name{font-size:16px;font-weight:600;letter-spacing:-0.4px}
+.badge{font-size:11px;font-family:'JetBrains Mono',monospace;color:var(--text-muted);background:var(--surface2);padding:3px 9px;border-radius:20px;border:1px solid var(--border)}
+
+/* Main */
+main{flex:1;overflow:hidden;position:relative}
+.view{position:absolute;inset:0;overflow-y:auto;-webkit-overflow-scrolling:touch;display:none;flex-direction:column;padding:12px 12px 20px}
+.view.on{display:flex}
+
+/* Editor */
+#editor-view{gap:12px}
+#code{
+  font-family:'JetBrains Mono',monospace;font-size:13.5px;line-height:1.7;
+  width:100%;min-height:230px;resize:vertical;
+  background:var(--surface);color:var(--text);
+  border:1px solid var(--border);border-radius:var(--radius);
+  padding:14px;tab-size:4;caret-color:var(--accent);outline:none;
+}
+#code:focus{border-color:var(--border2)}
+.out-label{font-size:10px;font-weight:600;letter-spacing:0.8px;text-transform:uppercase;color:var(--text-muted);margin-bottom:6px;padding-left:2px}
+#output{
+  font-family:'JetBrains Mono',monospace;font-size:13px;line-height:1.7;
+  background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);
+  padding:14px;white-space:pre-wrap;word-break:break-word;min-height:60px;color:var(--text);
+}
+#output.ph{color:var(--text-muted)}
+#output.ok{border-color:rgba(45,212,160,0.25)}
+#output.err{color:var(--error);border-color:rgba(255,94,94,0.25)}
+.ed-foot{display:flex;justify-content:flex-end;padding-top:4px}
+.ghost-btn{font-size:12px;color:var(--text-muted);background:transparent;border:none;cursor:pointer;padding:6px 2px}
+
+/* Run bar */
+#run-bar{flex-shrink:0;padding:8px 12px 6px;border-top:1px solid var(--border);background:var(--bg)}
+#run-btn{
+  width:100%;height:50px;background:var(--accent);color:#062318;
+  border:none;border-radius:var(--radius);
+  font-family:'DM Sans',sans-serif;font-size:15px;font-weight:600;
+  cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;
+  transition:opacity 0.15s,transform 0.1s;
+}
+#run-btn:active{transform:scale(0.985);opacity:0.88}
+#run-btn:disabled{opacity:0.35;cursor:not-allowed;transform:none}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:0.35}}
+.spin-icon{animation:spin 0.8s linear infinite}
+
+/* Nav */
+nav{
+  flex-shrink:0;display:flex;border-top:1px solid var(--border);background:var(--bg);
+  padding-bottom:var(--safe-bottom);
+}
+.nav-btn{
+  flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:3px;padding:8px 4px;background:transparent;border:none;cursor:pointer;
+  color:var(--text-dim);font-family:'DM Sans',sans-serif;font-size:10px;font-weight:500;
+  transition:color 0.15s;
+}
+.nav-btn svg{width:22px;height:22px}
+.nav-btn.on{color:var(--accent)}
+
+/* Libraries */
+#libs-view{gap:20px;padding-top:16px}
+.sec-title{font-size:10px;font-weight:600;letter-spacing:0.8px;text-transform:uppercase;color:var(--text-muted);margin-bottom:10px}
+.pkg-wrap{display:flex;flex-wrap:wrap;gap:8px}
+.chip{
+  display:inline-flex;align-items:center;gap:6px;
+  font-family:'JetBrains Mono',monospace;font-size:12px;
+  padding:6px 12px;border-radius:20px;border:1px solid var(--border2);
+  background:var(--surface2);color:var(--text);
+}
+.chip.ready{border-color:rgba(45,212,160,0.3);background:var(--accent-dim);color:var(--accent)}
+.chip.loading{color:var(--text-muted)}
+.chip.bad{border-color:rgba(255,94,94,0.3);background:var(--error-dim);color:var(--error)}
+.cdot{width:6px;height:6px;border-radius:50%;background:currentColor;flex-shrink:0}
+.inst-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px}
+.inst-note{font-size:12px;color:var(--text-muted);line-height:1.65;margin-bottom:14px}
+.inst-row{display:flex;gap:8px;align-items:center}
+.inst-row input{
+  flex:1;background:var(--surface2);border:1px solid var(--border2);
+  border-radius:var(--radius-sm);padding:11px 12px;
+  font-family:'JetBrains Mono',monospace;font-size:13px;color:var(--text);outline:none;
+}
+.inst-row input::placeholder{color:var(--text-dim)}
+.inst-row input:focus{border-color:var(--accent)}
+.inst-go{
+  background:var(--surface2);border:1px solid var(--border2);
+  border-radius:var(--radius-sm);padding:11px 16px;
+  font-family:'DM Sans',sans-serif;font-size:13px;font-weight:500;color:var(--text);
+  cursor:pointer;white-space:nowrap;
+}
+.inst-go:active{background:var(--surface3)}
+.inst-go:disabled{opacity:0.4}
+.inst-msg{font-size:12px;margin-top:10px;min-height:16px;font-family:'JetBrains Mono',monospace;color:var(--text-muted)}
+.inst-msg.ok{color:var(--accent)}
+.inst-msg.bad{color:var(--error)}
+.pkgnote{margin-top:16px;background:var(--surface2);border-radius:var(--radius-sm);padding:12px 14px;font-size:12px;color:var(--text-muted);line-height:1.7}
+.pkgnote strong{color:var(--text);font-weight:500}
+
+/* History */
+#history-view{gap:10px;padding-top:14px}
+.hcard{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:12px 14px;display:flex;flex-direction:column;gap:6px}
+.hcard-top{display:flex;justify-content:space-between;align-items:center}
+.htime{font-size:11px;color:var(--text-muted);font-family:'JetBrains Mono',monospace}
+.hload{font-size:12px;color:var(--accent);background:var(--accent-dim);border:none;border-radius:20px;padding:4px 13px;cursor:pointer;font-family:'DM Sans',sans-serif;font-weight:500}
+.hcode{font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.hout{font-size:12px;color:var(--text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-family:'JetBrains Mono',monospace}
+.empty{text-align:center;padding:3rem 1rem;color:var(--text-muted)}
+.empty svg{width:38px;height:38px;margin:0 auto 12px;display:block;opacity:0.3}
+.empty p{font-size:14px;line-height:1.6}
+.hist-foot{font-size:11px;color:var(--text-dim);text-align:center;padding-top:4px}
+</style>
+</head>
+<body>
+
+<div id="splash">
+  <div class="sp-icon">🐍</div>
+  <div class="sp-title">PyPad</div>
+  <div class="sp-sub">Python on your phone</div>
+  <div class="steps">
+    <div class="step" id="s0"><div class="step-dot">○</div><span>Python runtime</span></div>
+    <div class="step" id="s1"><div class="step-dot">○</div><span>numpy</span></div>
+    <div class="step" id="s2"><div class="step-dot">○</div><span>pandas</span></div>
+    <div class="step" id="s3"><div class="step-dot">○</div><span>micropip</span></div>
+  </div>
+  <div class="sp-note">Needs internet on first load<br>Cached for offline use after</div>
+</div>
+
+<div id="app">
+  <header>
+    <div class="h-left">
+      <div class="dot" id="dot"></div>
+      <span class="app-name">PyPad</span>
+    </div>
+    <span class="badge" id="badge">loading...</span>
+  </header>
+
+  <main>
+    <div class="view on" id="editor-view">
+      <textarea id="code" spellcheck="false" autocorrect="off" autocapitalize="off" autocomplete="off"
+        placeholder="# numpy + pandas are preloaded
+import numpy as np
+import pandas as pd
+
+arr = np.array([10, 20, 30, 40, 50])
+print(f'Mean: {arr.mean()}')
+print(f'Std:  {arr.std():.2f}')
+
+df = pd.DataFrame({'x': arr, 'x2': arr**2})
+print(df.head())"></textarea>
+      <div>
+        <div class="out-label">Output</div>
+        <div id="output" class="ph">Run your code to see output...</div>
+      </div>
+      <div class="ed-foot">
+        <button class="ghost-btn" onclick="clearEd()">Clear editor</button>
+      </div>
+    </div>
+
+    <div class="view" id="libs-view">
+      <div>
+        <div class="sec-title">Installed packages</div>
+        <div class="pkg-wrap" id="pkg-wrap"></div>
+      </div>
+      <div class="inst-card">
+        <div class="sec-title">Add a library</div>
+        <p class="inst-note">Any pure-Python package from PyPI. Works great with scikit-learn, scipy, matplotlib, statsmodels, requests, and more.</p>
+        <div class="inst-row">
+          <input id="pkg-in" placeholder="e.g. scikit-learn" autocorrect="off" autocapitalize="off" onkeydown="if(event.key==='Enter')addPkg()">
+          <button class="inst-go" id="inst-go" onclick="addPkg()">Install</button>
+        </div>
+        <div class="inst-msg" id="inst-msg"></div>
+      </div>
+      <div class="pkgnote">
+        <strong>What works:</strong> pure-Python packages from PyPI — scikit-learn, scipy, matplotlib, requests, statsmodels, sympy, networkx...<br><br>
+        <strong>What doesn't:</strong> packages with native C extensions not compiled for WebAssembly (e.g. lightgbm, xgboost). Most popular data science libraries work fine.
+      </div>
+    </div>
+
+    <div class="view" id="history-view">
+      <div id="hlist"></div>
+    </div>
+  </main>
+
+  <div id="run-bar">
+    <button id="run-btn" onclick="runCode()" disabled>
+      <svg viewBox="0 0 24 24" fill="currentColor" width="18" height="18"><path d="M8 5.14v14l11-7-11-7z"/></svg>
+      Run
+    </button>
+  </div>
+
+  <nav>
+    <button class="nav-btn on" id="nb-editor" onclick="go('editor')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+      Editor
+    </button>
+    <button class="nav-btn" id="nb-libs" onclick="go('libs')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="2" y="3" width="4" height="18" rx="1"/><rect x="9" y="3" width="4" height="18" rx="1"/><rect x="16" y="3" width="6" height="18" rx="1"/></svg>
+      Libraries
+    </button>
+    <button class="nav-btn" id="nb-history" onclick="go('history')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+      History
+    </button>
+  </nav>
+</div>
+
+<script src="https://cdn.jsdelivr.net/pyodide/v0.25.1/full/pyodide.js"></script>
+<script>
+let py = null;
+const pkgs = ['numpy','pandas'];
+
+function stepState(id, state) {
+  const el = document.getElementById(id);
+  el.className = 'step ' + state;
+  const dot = el.querySelector('.step-dot');
+  if (state === 'active') dot.textContent = '◌';
+  else if (state === 'done') dot.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="3" width="11" height="11"><polyline points="20 6 9 17 4 12"/></svg>';
+  else if (state === 'err') dot.innerHTML = '✕';
+}
+
+(async () => {
+  try {
+    stepState('s0','active');
+    py = await loadPyodide({ indexURL: 'https://cdn.jsdelivr.net/pyodide/v0.25.1/full/' });
+    stepState('s0','done');
+
+    stepState('s1','active');
+    await py.loadPackage('numpy');
+    stepState('s1','done');
+
+    stepState('s2','active');
+    await py.loadPackage('pandas');
+    stepState('s2','done');
+
+    stepState('s3','active');
+    await py.loadPackage('micropip');
+    stepState('s3','done');
+
+    await new Promise(r => setTimeout(r, 600));
+    document.getElementById('splash').classList.add('fade');
+    setTimeout(() => document.getElementById('splash').style.display = 'none', 450);
+    document.getElementById('dot').classList.add('on');
+    document.getElementById('badge').textContent = 'py 3.11 · ready';
+    document.getElementById('run-btn').disabled = false;
+    renderPkgs();
+  } catch(e) {
+    stepState('s0','err');
+    document.getElementById('splash').insertAdjacentHTML('beforeend',
+      `<p class="sp-err">Failed to load Python.<br>Check your internet connection<br>and reload the page.</p>`);
+  }
+})();
+
+function go(tab) {
+  ['editor','libs','history'].forEach(t => {
+    document.getElementById(t + '-view').classList.toggle('on', t === tab);
+    document.getElementById('nb-' + t).classList.toggle('on', t === tab);
+  });
+  document.getElementById('run-bar').style.display = tab === 'editor' ? 'block' : 'none';
+  if (tab === 'history') renderHistory();
+}
+
+function clearEd() {
+  document.getElementById('code').value = '';
+  const o = document.getElementById('output');
+  o.textContent = 'Run your code to see output...';
+  o.className = 'ph';
+}
+
+async function runCode() {
+  if (!py) return;
+  const code = document.getElementById('code').value.trim();
+  if (!code) return;
+  const btn = document.getElementById('run-btn');
+  const out = document.getElementById('output');
+  btn.disabled = true;
+  btn.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18" class="spin-icon"><circle cx="12" cy="12" r="10" stroke-dasharray="32" stroke-dashoffset="10"/></svg> Running...`;
+  out.className = '';
+  out.textContent = '';
+  let result = '';
+  try {
+    await py.runPythonAsync(`import sys\nfrom io import StringIO\n_b=StringIO()\nsys.stdout=_b\nsys.stderr=_b`);
+    await py.runPythonAsync(code);
+    result = py.globals.get('_b').getvalue();
+    out.className = result ? 'ok' : 'ph';
+    result = result || '(no output)';
+  } catch(e) {
+    result = e.message || String(e);
+    out.className = 'err';
+  } finally {
+    try { await py.runPythonAsync(`sys.stdout=sys.__stdout__\nsys.stderr=sys.__stderr__`); } catch(_) {}
+  }
+  out.textContent = result;
+  out.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  btn.disabled = false;
+  btn.innerHTML = `<svg viewBox="0 0 24 24" fill="currentColor" width="18" height="18"><path d="M8 5.14v14l11-7-11-7z"/></svg> Run`;
+  save(code, result);
+}
+
+function save(code, output) {
+  try {
+    localStorage.setItem('pypad_' + Date.now(), JSON.stringify({ code, output, ts: Date.now() }));
+    const keys = Object.keys(localStorage).filter(k => k.startsWith('pypad_')).sort();
+    if (keys.length > 80) keys.slice(0, keys.length - 80).forEach(k => localStorage.removeItem(k));
+  } catch(_) {}
+}
+
+function renderHistory() {
+  const list = document.getElementById('hlist');
+  const keys = Object.keys(localStorage).filter(k => k.startsWith('pypad_')).sort().reverse();
+  if (!keys.length) {
+    list.innerHTML = `<div class="empty"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg><p>No sessions yet.<br>Run some code to build history.</p></div>`;
+    return;
+  }
+  list.innerHTML = '';
+  keys.slice(0, 60).forEach(key => {
+    try {
+      const d = JSON.parse(localStorage.getItem(key));
+      const dt = new Date(d.ts);
+      const now = new Date();
+      const isToday = dt.toDateString() === now.toDateString();
+      const when = isToday
+        ? 'Today · ' + dt.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})
+        : dt.toLocaleDateString([], {month:'short', day:'numeric'}) + ' · ' + dt.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
+      const line1 = (d.code||'').split('\n').find(l => l.trim()) || '(empty)';
+      const outPrev = (d.output||'').replace(/\n/g,' ');
+      const card = document.createElement('div');
+      card.className = 'hcard';
+      card.innerHTML = `
+        <div class="hcard-top">
+          <span class="htime">${esc(when)}</span>
+          <button class="hload" onclick="loadSess('${esc(key)}')">Load ↗</button>
+        </div>
+        <div class="hcode">${esc(line1)}</div>
+        <div class="hout">${esc(outPrev.slice(0, 90))}</div>`;
+      list.appendChild(card);
+    } catch(_) {}
+  });
+  if (keys.length > 60) {
+    list.insertAdjacentHTML('beforeend', `<p class="hist-foot">Showing 60 of ${keys.length} sessions</p>`);
+  }
+}
+
+function loadSess(key) {
+  try {
+    const d = JSON.parse(localStorage.getItem(key));
+    document.getElementById('code').value = d.code;
+    const out = document.getElementById('output');
+    out.textContent = d.output;
+    out.className = '';
+    go('editor');
+  } catch(_) {}
+}
+
+function renderPkgs() {
+  const wrap = document.getElementById('pkg-wrap');
+  wrap.innerHTML = pkgs.map(p =>
+    `<span class="chip ready" id="chip-${p}"><span class="cdot"></span>${p}</span>`
+  ).join('');
+}
+
+async function addPkg() {
+  if (!py) return;
+  const input = document.getElementById('pkg-in');
+  const name = input.value.trim().toLowerCase().replace(/[^a-z0-9_\-\.]/g, '');
+  const msg = document.getElementById('inst-msg');
+  if (!name) return;
+  if (pkgs.includes(name)) {
+    msg.textContent = name + ' is already installed.'; msg.className = 'inst-msg'; return;
+  }
+  const btn = document.getElementById('inst-go');
+  btn.disabled = true; btn.textContent = '...';
+  msg.textContent = 'Installing ' + name + '...'; msg.className = 'inst-msg';
+  pkgs.push(name);
+  const chip = document.createElement('span');
+  chip.className = 'chip loading'; chip.id = 'chip-' + name;
+  chip.innerHTML = `<span class="cdot"></span>${name}`;
+  document.getElementById('pkg-wrap').appendChild(chip);
+  input.value = '';
+  try {
+    await py.runPythonAsync(`import micropip\nawait micropip.install('${name}')`);
+    chip.className = 'chip ready';
+    msg.textContent = '✓ ' + name + ' ready to import.'; msg.className = 'inst-msg ok';
+  } catch(e) {
+    chip.className = 'chip bad';
+    pkgs.splice(pkgs.indexOf(name), 1);
+    msg.textContent = 'Failed: ' + (e.message||'not found').split('\n')[0];
+    msg.className = 'inst-msg bad';
+  }
+  btn.disabled = false; btn.textContent = 'Install';
+}
+
+function esc(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+</script>
+</body>
+</html>

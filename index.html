@@ -440,7 +440,21 @@ warnings.filterwarnings('ignore', message='Matplotlib is currently using agg')
 
   let result = '';
   try {
-    await py.runPythonAsync(`import sys\nfrom io import StringIO\n_b=StringIO()\nsys.stdout=_b\nsys.stderr=_b`);
+    await py.runPythonAsync(`
+import sys
+from io import StringIO
+_b = StringIO()
+sys.stdout = _b
+sys.stderr = _b
+try:
+    import pandas as _pd
+    _pd.set_option('display.width', 1000)
+    _pd.set_option('display.max_columns', None)
+    _pd.set_option('display.max_colwidth', 40)
+    _pd.set_option('display.max_rows', 60)
+except:
+    pass
+`);
     await py.runPythonAsync(code);
     result = py.globals.get('_b').getvalue();
     out.className = result ? 'ok' : 'ph';

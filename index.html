@@ -381,7 +381,12 @@ async function runCode() {
     out.textContent = 'Loading matplotlib for the first time — takes ~10s, cached after...';
     try {
       await py.loadPackage('matplotlib');
-      await py.runPythonAsync(`import matplotlib\nmatplotlib.use('Agg')`);
+      await py.runPythonAsync(`
+import matplotlib
+matplotlib.use('Agg')
+import warnings
+warnings.filterwarnings('ignore', message='Matplotlib is currently using agg')
+`);
       mplLoaded = true;
       if (!pkgs.includes('matplotlib')) { pkgs.push('matplotlib'); renderPkgs(); }
     } catch(e) {

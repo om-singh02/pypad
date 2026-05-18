@@ -250,7 +250,10 @@ plt.show()"></textarea>
       <div>
         <div class="out-header">
           <div class="out-label">Output</div>
-          <button class="expand-btn" id="expand-btn" onclick="openModal()">⛶ Full screen</button>
+          <div style="display:flex;gap:6px;align-items:center;">
+            <button class="expand-btn" id="dl-btn" onclick="downloadOutput()">↓ Save</button>
+            <button class="expand-btn" id="expand-btn" onclick="openModal()">⛶ Full screen</button>
+          </div>
         </div>
         <div id="output" class="ph">Run your code to see output...</div>
         <div id="output-imgs" style="display:flex;flex-direction:column;gap:10px;margin-top:10px;"></div>
@@ -313,6 +316,7 @@ plt.show()"></textarea>
   <div class="modal-header">
     <span class="modal-title">Output</span>
     <div style="display:flex;gap:8px;">
+      <button class="modal-copy" onclick="downloadOutput()">↓ Save</button>
       <button class="modal-copy" onclick="copyOutput()">Copy</button>
       <button class="modal-close" onclick="closeModal()">✕ Close</button>
     </div>
@@ -397,6 +401,7 @@ function clearEd() {
   o.className = 'ph';
   document.getElementById('output-imgs').innerHTML = '';
   document.getElementById('expand-btn').style.display = 'none';
+  document.getElementById('dl-btn').style.display = 'none';
 }
 
 async function runCode() {
@@ -467,6 +472,7 @@ except:
   }
   out.textContent = result;
   document.getElementById('expand-btn').style.display = 'block';
+  document.getElementById('dl-btn').style.display = 'block';
   out.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 
   // Capture any matplotlib figures and render as images
@@ -638,6 +644,34 @@ function insertSnippet(snippet) {
   ta.value = before + insert + after;
   ta.selectionStart = ta.selectionEnd = start + insert.length;
   ta.focus();
+}
+
+function downloadOutput() {
+  const text = document.getElementById('output').textContent;
+  const imgs = document.getElementById('output-imgs').querySelectorAll('img');
+  const ts = new Date().toISOString().slice(0,19).replace(/[:T]/g,'-');
+  const hasText = text && text !== '(no output)' && text !== 'Run your code to see output...';
+  const hasImgs = imgs.length > 0;
+
+  // Download text as .txt
+  if (hasText) {
+    const blob = new Blob([text], { type: 'text/plain' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `output_${ts}.txt`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  }
+
+  // Download each plot as .png
+  if (hasImgs) {
+    imgs.forEach((img, i) => {
+      const a = document.createElement('a');
+      a.href = img.src;
+      a.download = imgs.length === 1 ? `plot_${ts}.png` : `plot_${i+1}_${ts}.png`;
+      a.click();
+    });
+  }
 }
 
 function openModal() {

@@ -78,11 +78,31 @@ main{flex:1;overflow:hidden;position:relative}
 #output{
   font-family:'JetBrains Mono',monospace;font-size:13px;line-height:1.7;
   background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);
-  padding:14px;white-space:pre-wrap;word-break:break-word;min-height:60px;color:var(--text);
+  padding:14px;white-space:pre-wrap;word-break:break-word;
+  min-height:60px;max-height:200px;overflow-y:auto;color:var(--text);
 }
 #output.ph{color:var(--text-muted)}
 #output.ok{border-color:rgba(45,212,160,0.25)}
 #output.err{color:var(--error);border-color:rgba(255,94,94,0.25)}
+.out-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px}
+.expand-btn{font-size:11px;font-weight:500;color:var(--accent);background:var(--accent-dim);border:none;border-radius:20px;padding:3px 10px;cursor:pointer;display:none}
+/* Full screen output modal */
+#out-modal{
+  position:fixed;inset:0;background:var(--bg);z-index:300;
+  display:none;flex-direction:column;
+  padding-top:var(--safe-top);padding-bottom:var(--safe-bottom);
+}
+#out-modal.open{display:flex}
+.modal-header{display:flex;justify-content:space-between;align-items:center;padding:14px 16px;border-bottom:1px solid var(--border);flex-shrink:0}
+.modal-title{font-size:14px;font-weight:500}
+.modal-close{background:var(--surface2);border:1px solid var(--border2);border-radius:20px;padding:6px 14px;font-size:13px;color:var(--text);cursor:pointer}
+.modal-copy{background:var(--accent-dim);border:1px solid rgba(45,212,160,0.3);border-radius:20px;padding:6px 14px;font-size:13px;color:var(--accent);cursor:pointer}
+#out-modal-body{
+  flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;
+  padding:16px;font-family:'JetBrains Mono',monospace;font-size:13px;
+  line-height:1.75;white-space:pre-wrap;word-break:break-word;color:var(--text);
+}
+#out-modal-imgs{padding:0 16px 16px;display:flex;flex-direction:column;gap:10px}
 .ed-foot{display:flex;justify-content:flex-end;padding-top:4px}
 .ghost-btn{font-size:12px;color:var(--text-muted);background:transparent;border:none;cursor:pointer;padding:6px 2px}
 
@@ -227,7 +247,10 @@ plt.title('Sine and Cosine')
 plt.tight_layout()
 plt.show()"></textarea>
       <div>
-        <div class="out-label">Output</div>
+        <div class="out-header">
+          <div class="out-label">Output</div>
+          <button class="expand-btn" id="expand-btn" onclick="openModal()">⛶ Full screen</button>
+        </div>
         <div id="output" class="ph">Run your code to see output...</div>
         <div id="output-imgs" style="display:flex;flex-direction:column;gap:10px;margin-top:10px;"></div>
       </div>
@@ -282,6 +305,19 @@ plt.show()"></textarea>
       History
     </button>
   </nav>
+</div>
+
+<!-- Full screen output modal -->
+<div id="out-modal">
+  <div class="modal-header">
+    <span class="modal-title">Output</span>
+    <div style="display:flex;gap:8px;">
+      <button class="modal-copy" onclick="copyOutput()">Copy</button>
+      <button class="modal-close" onclick="closeModal()">✕ Close</button>
+    </div>
+  </div>
+  <div id="out-modal-body"></div>
+  <div id="out-modal-imgs"></div>
 </div>
 
 <script src="https://cdn.jsdelivr.net/pyodide/v0.25.1/full/pyodide.js"></script>
@@ -359,6 +395,7 @@ function clearEd() {
   o.textContent = 'Run your code to see output...';
   o.className = 'ph';
   document.getElementById('output-imgs').innerHTML = '';
+  document.getElementById('expand-btn').style.display = 'none';
 }
 
 async function runCode() {
@@ -414,6 +451,7 @@ warnings.filterwarnings('ignore', message='Matplotlib is currently using agg')
     try { await py.runPythonAsync(`sys.stdout=sys.__stdout__\nsys.stderr=sys.__stderr__`); } catch(_) {}
   }
   out.textContent = result;
+  document.getElementById('expand-btn').style.display = 'block';
   out.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 
   // Capture any matplotlib figures and render as images
@@ -585,6 +623,35 @@ function insertSnippet(snippet) {
   ta.value = before + insert + after;
   ta.selectionStart = ta.selectionEnd = start + insert.length;
   ta.focus();
+}
+
+function openModal() {
+  document.getElementById('out-modal-body').textContent = document.getElementById('output').textContent;
+  const imgs = document.getElementById('output-imgs').querySelectorAll('img');
+  const modalImgs = document.getElementById('out-modal-imgs');
+  modalImgs.innerHTML = '';
+  imgs.forEach(img => {
+    const el = document.createElement('img');
+    el.src = img.src;
+    el.style.cssText = 'width:100%;border-radius:10px;display:block;border:1px solid rgba(255,255,255,0.07);';
+    modalImgs.appendChild(el);
+  });
+  document.getElementById('out-modal').classList.add('open');
+  document.body.style.overflow = 'hidden';
+}
+
+function closeModal() {
+  document.getElementById('out-modal').classList.remove('open');
+  document.body.style.overflow = '';
+}
+
+function copyOutput() {
+  const text = document.getElementById('output').textContent;
+  navigator.clipboard.writeText(text).then(() => {
+    const btn = document.querySelector('.modal-copy');
+    btn.textContent = 'Copied!';
+    setTimeout(() => btn.textContent = 'Copy', 1800);
+  });
 }
 
 function esc(s) {
